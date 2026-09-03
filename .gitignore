@@ -1,0 +1,8 @@
+versions/
+references/
+output/
+dataset/
+.agents/
+.pytest_cache/
+.pytest_tmp/
+AGENTS.md
