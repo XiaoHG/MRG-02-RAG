@@ -12,9 +12,13 @@ dependencies = []
 
 [project.optional-dependencies]
 test = ["pytest>=8.0"]
+pdf = ["pypdf>=5.0", "pymupdf>=1.24"]
+web = ["ddgs>=9.16", "trafilatura>=2.2", "requests>=2.0"]
+llm = ["torch>=2.0", "transformers>=4.45", "accelerate>=0.33", "bitsandbytes>=0.43"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
+py-modules = ["catalog", "crawler", "documents", "extractor", "llm", "pipeline", "prompts", "pubmed", "schema", "storage"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

@@ -8,8 +8,8 @@ from urllib.request import Request, urlopen
 import json
 import re
 
-from .catalog import SourceSpec
-from .storage import DatasetWriter
+from catalog import SourceSpec
+from storage import DatasetWriter
 
 
 class Opener(Protocol):
@@ -26,6 +26,12 @@ class CrawlResult:
     title: str
     text: str
     content_type: str | None = None
+    source_type: str = "search"
+    authority_level: str = "medium"
+    access_status: str = "public"
+    notes: str = ""
+    crawl_status: str = "ok"
+    error: str = ""
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -79,8 +85,25 @@ def extract_text(html: str) -> tuple[str, str]:
     return title, text
 
 
+def extract_document_text(content: str, content_type: str | None, url: str) -> tuple[str, str]:
+    if content_type and "json" in content_type:
+        try:
+            data = json.loads(content)
+            return url, json.dumps(data, ensure_ascii=False, indent=2)
+        except json.JSONDecodeError:
+            return url, _clean_text(content)
+    return extract_text(content)
+
+
 def download_url(url: str, timeout: int = 20, opener: Opener | None = None) -> tuple[str, str | None]:
-    request = Request(url, headers={"User-Agent": "MRG-02-RAG/1.0"})
+    request = Request(
+        url,
+        headers={
+            "User-Agent": "Mozilla/5.0 (compatible; medical-knowledge-crawler/1.0)",
+            "Accept": "text/html,application/xhtml+xml,application/xml,application/json;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        },
+    )
     response = (opener or urlopen)(request, timeout=timeout)
     content_type = getattr(response, "headers", {}).get_content_type() if getattr(response, "headers", None) else None
     raw = response.read()
@@ -104,8 +127,17 @@ def crawl_sources(
     for source in sources:
         records: list[CrawlResult] = []
         for url in source.urls:
-            html, content_type = download_url(url, opener=opener)
-            title, text = extract_text(html)
+            try:
+                html, content_type = download_url(url, opener=opener)
+                title, text = extract_document_text(html, content_type, url)
+                crawl_status = "ok"
+                error = ""
+            except Exception as exc:
+                content_type = None
+                title = ""
+                text = ""
+                crawl_status = "failed"
+                error = f"{type(exc).__name__}: {exc}"
             record = CrawlResult(
                 keyword=source.keyword,
                 source_name=source.name,
@@ -115,6 +147,12 @@ def crawl_sources(
                 title=title,
                 text=text,
                 content_type=content_type,
+                source_type=source.source_type,
+                authority_level=source.authority_level,
+                access_status=source.access_status,
+                notes=source.notes,
+                crawl_status=crawl_status,
+                error=error,
             )
             records.append(record)
             results.append(record)
@@ -125,5 +163,9 @@ def crawl_sources(
                 description=source.description,
                 records=[record.to_dict() for record in records],
                 fetched_at=fetched_at,
+                source_type=source.source_type,
+                authority_level=source.authority_level,
+                access_status=source.access_status,
+                notes=source.notes,
             )
     return results

@@ -11,9 +11,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from mrg02_rag.catalog import build_sources, default_config, load_config
-from mrg02_rag.crawler import crawl_sources
-from mrg02_rag.storage import DatasetWriter
+from catalog import build_sources, default_config, load_config
+from crawler import crawl_sources
+from storage import DatasetWriter
 
 
 def build_parser() -> ArgumentParser:

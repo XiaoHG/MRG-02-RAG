@@ -17,6 +17,10 @@ class DatasetWriter:
         description: str,
         records: list[dict[str, object]],
         fetched_at: datetime,
+        source_type: str = "search",
+        authority_level: str = "medium",
+        access_status: str = "public",
+        notes: str = "",
     ) -> Path:
         group_dir = self.base_dir / group_name / fetched_at.strftime("%Y%m%d_%H%M%S")
         group_dir.mkdir(parents=True, exist_ok=True)
@@ -33,6 +37,10 @@ class DatasetWriter:
             "group_name": group_name,
             "keyword": keyword,
             "description": description,
+            "source_type": source_type,
+            "authority_level": authority_level,
+            "access_status": access_status,
+            "notes": notes,
             "fetched_at": fetched_at.isoformat(),
             "record_count": len(records),
             "documents_file": "documents.jsonl",

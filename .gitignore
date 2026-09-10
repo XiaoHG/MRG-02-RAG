@@ -1,8 +1,14 @@
 versions/
-references/
+references/*
+!references/
+!references/*.md
 output/
 dataset/
 .agents/
 .pytest_cache/
 .pytest_tmp/
+__pycache__/
+models/
+*.py[cod]
+*.egg-info/
 AGENTS.md
