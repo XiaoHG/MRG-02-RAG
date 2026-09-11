@@ -31,7 +31,7 @@ def test_pipeline_extracts_and_writes_review_files(tmp_path) -> None:
     assert (run_dir / "prompts.jsonl").exists()
     assert (run_dir / "raw_outputs.jsonl").exists()
     assert (run_dir / "triples_clean.csv").exists()
-    assert (run_dir / "triples_for_neo4j.csv").exists()
+    assert (run_dir / "triples_structured.csv").exists()
     manifest = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["chunk_count"] == 1
     assert manifest["triple_count"] == 1

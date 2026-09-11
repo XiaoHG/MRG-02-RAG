@@ -3,6 +3,8 @@ references/*
 !references/
 !references/*.md
 output/
+LanceDB/
+output/lancedb_result/
 .agents/
 .pytest_cache/
 .pytest_tmp/

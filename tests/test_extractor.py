@@ -32,7 +32,7 @@ head_entity,relation,tail_entity
     assert triples[0].chunk_id == "doc-0001"
 
 
-def test_triples_to_csv_can_emit_neo4j_columns() -> None:
+def test_triples_to_csv_emits_structured_columns() -> None:
     triples = parse_triples_csv("Dental fluorosis,has_imaging_feature,enamel opaque white spots")
 
     csv_text = triples_to_csv(triples)

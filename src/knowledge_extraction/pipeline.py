@@ -92,7 +92,7 @@ def write_extraction_run(
 
     all_triples = [triple for result in results for triple in result.triples]
     (run_dir / "triples_clean.csv").write_text(triples_to_csv(all_triples, include_source=True), encoding="utf-8")
-    (run_dir / "triples_for_neo4j.csv").write_text(triples_to_csv(all_triples), encoding="utf-8")
+    (run_dir / "triples_structured.csv").write_text(triples_to_csv(all_triples), encoding="utf-8")
 
     manifest = {
         "run_name": run_name,
@@ -104,7 +104,7 @@ def write_extraction_run(
             "prompts": "prompts.jsonl",
             "raw_outputs": "raw_outputs.jsonl",
             "triples_clean": "triples_clean.csv",
-            "triples_for_neo4j": "triples_for_neo4j.csv",
+            "triples_structured": "triples_structured.csv",
         },
     }
     (run_dir / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -123,7 +123,7 @@ def _run_readme(manifest: dict[str, object]) -> str:
         "- `prompts.jsonl`: final prompts sent to the LLM.\n"
         "- `raw_outputs.jsonl`: raw LLM CSV outputs for audit.\n"
         "- `triples_clean.csv`: cleaned triples with source and chunk_id for manual review.\n"
-        "- `triples_for_neo4j.csv`: three-column CSV for Neo4j import.\n"
+        "- `triples_structured.csv`: three-column structured triples for review or knowledge-base ingestion.\n"
     )
 
 
