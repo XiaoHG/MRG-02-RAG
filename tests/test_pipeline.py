@@ -3,9 +3,9 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 
-from documents import DocumentChunk
-from llm import StaticLLMClient
-from pipeline import extract_triples_from_chunks, prepare_prompt_results, write_extraction_run
+from knowledge_extraction.documents import DocumentChunk
+from knowledge_extraction.llm import StaticLLMClient
+from knowledge_extraction.pipeline import extract_triples_from_chunks, prepare_prompt_results, write_extraction_run
 
 
 def test_pipeline_extracts_and_writes_review_files(tmp_path) -> None:

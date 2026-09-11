@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 import pytest
 
-from llm import CommandLLMClient
+from knowledge_extraction.llm import CommandLLMClient
 
 
 @dataclass
@@ -18,7 +18,7 @@ def test_command_llm_client_reports_exit_code_when_stderr_is_missing(monkeypatch
     def fake_run(*args, **kwargs):
         return _FakeResult(returncode=2)
 
-    monkeypatch.setattr("llm.subprocess.run", fake_run)
+    monkeypatch.setattr("knowledge_extraction.llm.subprocess.run", fake_run)
 
     client = CommandLLMClient(("python", "runner.py"), timeout=1)
 

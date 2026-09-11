@@ -17,13 +17,15 @@ PubMed 摘要中构造可审查的知识三元组，并支持使用本地 Huggin
 
 ## 目录结构
 
-- `src/documents.py`：PDF/文本文件读取、HTML 正文提取和文本分块。
-- `src/extractor.py`：prompt 构造、CSV 三元组解析和清洗。
-- `src/llm.py`：本地 LLM 命令适配器。
-- `src/pipeline.py`：三元组抽取流程和结果写盘。
-- `src/prompts.py`：prompt 文件加载。
-- `src/pubmed.py`：PubMed 摘要检索、解析和分块。
-- `src/schema.py`：文档块、三元组和抽取结果的数据结构。
+- `src/knowledge_extraction/`：`extract_triples.py` 使用的知识抽取源码包。
+- `src/knowledge_extraction/documents.py`：PDF/文本文件读取、HTML 正文提取和文本分块。
+- `src/knowledge_extraction/extractor.py`：prompt 构造、CSV 三元组解析和清洗。
+- `src/knowledge_extraction/llm.py`：本地 LLM 命令适配器。
+- `src/knowledge_extraction/pipeline.py`：三元组抽取流程和结果写盘。
+- `src/knowledge_extraction/prompts.py`：prompt 文件加载。
+- `src/knowledge_extraction/pubmed.py`：PubMed 摘要检索、解析和分块。
+- `src/knowledge_extraction/schema.py`：文档块、三元组和抽取结果的数据结构。
+- `cli/trafilatura.py` 当前只使用第三方网页采集依赖，没有独立的 `src` 业务源码包。
 - `cli/extract_triples.py`：三元组抽取 CLI。
 - `cli/local_llm_runner.py`：本地模型推理 CLI。
 - `cli/trafilatura.py`：网页正文提取和 DDGS 批量采集 CLI。
@@ -44,7 +46,14 @@ PubMed 摘要中构造可审查的知识三元组，并支持使用本地 Huggin
 ```
 
 网页资料使用独立的 `trafilatura.py` 采集后，再将生成的 Markdown 文件通过
-`extract_triples.py` 批量抽取。
+`extract_triples.py` 批量抽取。后续若网页采集需要新增项目内源码，会单独放入
+`src/web_acquisition/`，与 `knowledge_extraction/` 保持职责隔离。
+
+源码组织约定：
+
+- `src/knowledge_extraction/`：只放三元组抽取及其输入处理、prompt、LLM 适配等源码。
+- `src/web_acquisition/`：未来网页采集需要项目内业务源码时使用，当前尚未创建。
+- 后续新增功能应根据所属 CLI 或业务边界放入独立子包，不直接堆放在 `src/` 根目录。
 
 ## 环境安装
 
@@ -294,7 +303,7 @@ python .\cli\trafilatura.py `
 - `prompts/extraction_triples_v1.md`：三元组抽取 prompt。
 - `prompts/system_triples_v1.md`：本地模型 system prompt。
 
-`src/prompts.py` 负责加载提示词。每次抽取运行会在输出目录保存完整 prompt，便于
+`src/knowledge_extraction/prompts.py` 负责加载提示词。每次抽取运行会在输出目录保存完整 prompt，便于
 人工审查和回放。
 
 ## 测试

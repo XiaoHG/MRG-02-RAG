@@ -1,7 +1,0 @@
-documents
-extractor
-llm
-pipeline
-prompts
-pubmed
-schema

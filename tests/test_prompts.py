@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from prompts import load_prompt_template
+from knowledge_extraction.prompts import load_prompt_template
 
 
 def test_load_prompt_template_reads_prompt_file(tmp_path: Path) -> None:

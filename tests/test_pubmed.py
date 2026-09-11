@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pubmed import parse_pubmed_xml
+from knowledge_extraction.pubmed import parse_pubmed_xml
 
 
 def test_parse_pubmed_xml_extracts_article_metadata() -> None:

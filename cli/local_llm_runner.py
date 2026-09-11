@@ -15,7 +15,7 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from prompts import load_prompt_template
+from knowledge_extraction.prompts import load_prompt_template
 
 
 def _log(message: str) -> None:

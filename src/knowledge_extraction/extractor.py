@@ -5,8 +5,8 @@ import csv
 from io import StringIO
 import re
 
-from prompts import load_prompt_template
-from schema import ALLOWED_ENTITY_TYPES, ALLOWED_RELATION_SET, ALLOWED_RELATIONS
+from .prompts import load_prompt_template
+from .schema import ALLOWED_ENTITY_TYPES, ALLOWED_RELATION_SET, ALLOWED_RELATIONS
 
 
 @dataclass(frozen=True)

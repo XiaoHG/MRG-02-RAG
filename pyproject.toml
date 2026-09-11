@@ -18,7 +18,6 @@ llm = ["torch>=2.0", "transformers>=4.45", "accelerate>=0.33", "bitsandbytes>=0.
 
 [tool.setuptools]
 package-dir = {"" = "src"}
-py-modules = ["documents", "extractor", "llm", "pipeline", "prompts", "pubmed", "schema"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

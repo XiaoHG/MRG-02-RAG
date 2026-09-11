@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from extractor import build_extraction_prompt, parse_triples_csv, triples_to_csv
+from knowledge_extraction.extractor import build_extraction_prompt, parse_triples_csv, triples_to_csv
 
 
 def test_build_prompt_contains_schema_and_chunk_text() -> None:

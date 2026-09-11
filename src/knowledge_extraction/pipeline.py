@@ -6,9 +6,9 @@ from pathlib import Path
 import json
 from typing import Callable
 
-from documents import DocumentChunk
-from extractor import Triple, build_extraction_prompt, parse_triples_csv, triples_to_csv
-from llm import LLMClient
+from .documents import DocumentChunk
+from .extractor import Triple, build_extraction_prompt, parse_triples_csv, triples_to_csv
+from .llm import LLMClient
 
 
 @dataclass(frozen=True)

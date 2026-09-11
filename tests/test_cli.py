@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cli.extract_triples import _collect_input_files, build_parser
-from llm import missing_python_script
+from knowledge_extraction.llm import missing_python_script
 
 
 def test_missing_python_script_detects_placeholder_runner() -> None:

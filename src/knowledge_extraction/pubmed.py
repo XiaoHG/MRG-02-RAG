@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 import xml.etree.ElementTree as ET
 
-from documents import DocumentChunk, chunk_text
+from .documents import DocumentChunk, chunk_text
 
 
 @dataclass(frozen=True)

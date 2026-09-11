@@ -11,14 +11,14 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from documents import (
+from knowledge_extraction.documents import (
     SUPPORTED_EXTENSIONS,
     DocumentChunk,
     load_document_chunks,
 )
-from llm import CommandLLMClient, StaticLLMClient, missing_python_script, parse_command
-from pipeline import extract_triples_from_chunks, prepare_prompt_results, write_extraction_run
-from pubmed import pubmed_chunks
+from knowledge_extraction.llm import CommandLLMClient, StaticLLMClient, missing_python_script, parse_command
+from knowledge_extraction.pipeline import extract_triples_from_chunks, prepare_prompt_results, write_extraction_run
+from knowledge_extraction.pubmed import pubmed_chunks
 
 
 def _log(message: str) -> None:

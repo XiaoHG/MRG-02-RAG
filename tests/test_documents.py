@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from documents import chunk_text, load_document_chunks
+from knowledge_extraction.documents import chunk_text, load_document_chunks
 
 
 def test_chunk_text_uses_overlap_and_source_ids() -> None:
