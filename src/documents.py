@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from html.parser import HTMLParser
 import logging
 from pathlib import Path
 import subprocess
@@ -16,6 +17,46 @@ class DocumentChunk:
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
+
+
+TEXT_EXTENSIONS = frozenset(
+    {
+        ".c",
+        ".cfg",
+        ".csv",
+        ".conf",
+        ".cpp",
+        ".css",
+        ".go",
+        ".h",
+        ".htm",
+        ".html",
+        ".ini",
+        ".json",
+        ".java",
+        ".js",
+        ".log",
+        ".md",
+        ".py",
+        ".rst",
+        ".rs",
+        ".scss",
+        ".sql",
+        ".tex",
+        ".text",
+        ".ts",
+        ".tsv",
+        ".txt",
+        ".vue",
+        ".xml",
+        ".jsx",
+        ".tsx",
+        ".toml",
+        ".yaml",
+        ".yml",
+    }
+)
+SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | {".pdf"}
 
 
 def chunk_text(text: str, *, chunk_size: int = 1800, overlap: int = 200, source: str = "text") -> list[DocumentChunk]:
@@ -70,6 +111,76 @@ def load_pdf_chunks(path: str | Path, *, chunk_size: int = 1800, overlap: int = 
     pdf_path = Path(path)
     text = extract_pdf_text(pdf_path)
     return chunk_text(text, chunk_size=chunk_size, overlap=overlap, source=str(pdf_path))
+
+
+def load_document_chunks(
+    path: str | Path,
+    *,
+    chunk_size: int = 1800,
+    overlap: int = 200,
+) -> list[DocumentChunk]:
+    """Load a PDF or supported text document and split it into chunks."""
+    document_path = Path(path)
+    suffix = document_path.suffix.lower()
+    if suffix == ".pdf":
+        return load_pdf_chunks(document_path, chunk_size=chunk_size, overlap=overlap)
+    if suffix in TEXT_EXTENSIONS:
+        text = extract_text_file(document_path)
+        if suffix in {".htm", ".html"}:
+            text = _extract_html_text(text)
+        return chunk_text(text, chunk_size=chunk_size, overlap=overlap, source=str(document_path))
+    raise ValueError(
+        f"Unsupported input file format: {document_path}. "
+        f"Supported extensions: {', '.join(sorted(SUPPORTED_EXTENSIONS))}"
+    )
+
+
+def extract_text_file(path: str | Path) -> str:
+    """Read a text-like document using common Unicode and Chinese encodings."""
+    document_path = Path(path)
+    if not document_path.exists():
+        raise FileNotFoundError(document_path)
+    if not document_path.is_file():
+        raise IsADirectoryError(document_path)
+
+    raw = document_path.read_bytes()
+    for encoding in ("utf-8-sig", "utf-8", "gb18030", "cp1252"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("utf-8", errors="replace")
+
+
+class _VisibleTextHTMLParser(HTMLParser):
+    _ignored_tags = frozenset({"script", "style", "noscript", "template"})
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._ignored_depth = 0
+        self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs) -> None:
+        if tag.lower() in self._ignored_tags:
+            self._ignored_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag.lower() in self._ignored_tags and self._ignored_depth:
+            self._ignored_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if not self._ignored_depth and data.strip():
+            self.parts.append(data)
+
+
+def _extract_html_text(html: str) -> str:
+    parser = _VisibleTextHTMLParser()
+    try:
+        parser.feed(html)
+        parser.close()
+    except Exception:
+        return html
+    return "\n".join(parser.parts)
 
 
 def _extract_with_pypdf(path: Path) -> str:

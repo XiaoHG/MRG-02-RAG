@@ -47,15 +47,20 @@ PowerShell 示例：
         DDGS 搜索区域，默认是 `cn-zh`。
 输出规则：
 
-    1. 输出目录固定为项目根目录下的 `output/trafilatura/`。
-    2. 文件名优先使用网页标题，其次使用 DDGS 返回的标题，最后使用
+    1. 每次运行在项目根目录下的 `output/trafilatura/` 中创建一个新的
+       `YYYYMMDD_HHMMSS_mmmmmmZ` 时间戳子目录。
+    2. 抓取前会根据已有 Markdown 的 `source_url` 元数据判断 URL 是否已经下载；
+       已下载的 URL 会跳过，不会再次调用 `fetch_url()`。
+    3. 文件名优先使用网页标题，其次使用 DDGS 返回的标题，最后使用
        URL 路径名或域名。
-    3. 文件名会自动清理 Windows 不允许使用的字符。
-    4. 文件扩展名为 `.md`。
-    5. 不覆盖已有文件。同名时自动追加三位序号，例如
+    4. 文件名会自动清理 Windows 不允许使用的字符。
+    5. 文件扩展名为 `.md`。
+    6. 不覆盖已有文件。同名时自动追加三位序号，例如
        `article.md`、`article_001.md`、`article_002.md`。
-    6. 文件内容使用 UTF-8 编码。
-    7. 批量模式的 Markdown 文件开头会保存来源 URL、搜索词、搜索结果标题、
+    7. 文件内容使用 UTF-8 编码。
+    8. 批量模式会将 DDGS 原始结果先保存为本次运行目录下的
+       `ddgs_search.json`，并持续记录每个 URL 的抓取状态和输出文件。
+    9. 批量模式的 Markdown 文件开头会保存来源 URL、搜索词、搜索结果标题、
        摘要和发布时间等元数据，方便后续追溯。
 
 注意事项：
@@ -80,14 +85,23 @@ PowerShell 示例：
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
+import json
+import os
 import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import unquote, urlparse
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 
 DEFAULT_URL = "https://github.blog/2019-03-29-leader-spotlight-erin-spiceland/"
+OUTPUT_DIR = Path(__file__).resolve().parents[1] / "output" / "trafilatura"
+CURRENT_RUN_DIR: Path | None = None
+FRONTMATTER_FIELD_RE = re.compile(
+    r'(?m)^(?P<key>source_url(?:_canonical)?):\s*"(?P<value>(?:\\.|[^"])*)"\s*$'
+)
+SEARCH_CONTENT_MAX_LENGTH = 200
 
 
 def _parse_args() -> argparse.Namespace:
@@ -113,6 +127,111 @@ def _safe_filename(name: str) -> str:
     return name[:180] or "untitled"
 
 
+def _normalize_url(url: str) -> str:
+    """Return a stable URL key for duplicate detection."""
+    parsed = urlsplit(url.strip())
+    if not parsed.scheme or not parsed.netloc:
+        return url.strip()
+
+    hostname = (parsed.hostname or "").lower()
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    default_port = (parsed.scheme.lower() == "http" and port == 80) or (
+        parsed.scheme.lower() == "https" and port == 443
+    )
+    host = f"[{hostname}]" if ":" in hostname and not hostname.startswith("[") else hostname
+    netloc = host
+    if port is not None and not default_port:
+        netloc = f"{netloc}:{port}"
+
+    path = parsed.path or "/"
+    return urlunsplit((parsed.scheme.lower(), netloc, path, parsed.query, ""))
+
+
+def _output_dir() -> Path:
+    output_dir = CURRENT_RUN_DIR or OUTPUT_DIR
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
+
+
+def _create_run_dir() -> Path:
+    """Create one isolated output directory for the current CLI invocation."""
+    global CURRENT_RUN_DIR
+
+    output_root = OUTPUT_DIR
+    output_root.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%fZ")
+    run_dir = output_root / timestamp
+    suffix = 1
+    while run_dir.exists():
+        run_dir = output_root / f"{timestamp}_{suffix:02d}"
+        suffix += 1
+    run_dir.mkdir()
+    CURRENT_RUN_DIR = run_dir
+    return run_dir
+
+
+def _ensure_run_dir() -> Path:
+    if CURRENT_RUN_DIR is None:
+        return _create_run_dir()
+    try:
+        current_parent = CURRENT_RUN_DIR.parent.resolve()
+        output_root = OUTPUT_DIR.resolve()
+    except OSError:
+        return _create_run_dir()
+    if current_parent != output_root:
+        return _create_run_dir()
+    return CURRENT_RUN_DIR
+
+
+def _frontmatter_fields(markdown: str) -> dict[str, str]:
+    if not markdown.startswith("---"):
+        return {}
+
+    fields: dict[str, str] = {}
+    for match in FRONTMATTER_FIELD_RE.finditer(markdown):
+        try:
+            value = json.loads(f'"{match.group("value")}"')
+        except json.JSONDecodeError:
+            value = match.group("value")
+        fields[match.group("key")] = value
+    return fields
+
+
+def _downloaded_url_index(output_dir: Path | None = None) -> dict[str, Path]:
+    """Index existing Markdown files by their canonical source URL."""
+    directory = output_dir or OUTPUT_DIR
+    directory.mkdir(parents=True, exist_ok=True)
+    index: dict[str, Path] = {}
+    for markdown_path in directory.rglob("*.md"):
+        try:
+            fields = _frontmatter_fields(markdown_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            continue
+        source_url = fields.get("source_url_canonical") or fields.get("source_url")
+        if source_url:
+            index.setdefault(_normalize_url(source_url), markdown_path)
+    return index
+
+
+def _existing_download(url: str, downloaded_urls: dict[str, Path]) -> Path | None:
+    return downloaded_urls.get(_normalize_url(url))
+
+
+def _relative_output_path(path: Path) -> str:
+    return str(path.relative_to(OUTPUT_DIR))
+
+
+def _search_summary(value: object) -> str:
+    """Keep the DDGS result content as a compact, factual search summary."""
+    summary = re.sub(r"\s+", " ", str(value or "")).strip()
+    if len(summary) <= SEARCH_CONTENT_MAX_LENGTH:
+        return summary
+    return summary[: SEARCH_CONTENT_MAX_LENGTH - 1].rstrip() + "…"
+
+
 def _page_name(url: str, metadata=None, fallback_title: str | None = None) -> str:
     title = getattr(metadata, "title", None) if metadata else None
     if title and title.strip():
@@ -120,14 +239,13 @@ def _page_name(url: str, metadata=None, fallback_title: str | None = None) -> st
     if fallback_title and fallback_title.strip():
         return _safe_filename(fallback_title)
 
-    parsed = urlparse(url)
+    parsed = urlsplit(url)
     path_name = Path(unquote(parsed.path.rstrip("/"))).name
     return _safe_filename(path_name or parsed.netloc or "untitled")
 
 
 def _new_output_path(url: str, metadata=None, fallback_title: str | None = None) -> Path:
-    output_dir = Path(__file__).resolve().parents[1] / "output" / "trafilatura"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = _output_dir()
 
     base_name = _page_name(url, metadata, fallback_title)
     output_path = output_dir / f"{base_name}.md"
@@ -185,6 +303,7 @@ def _save_extraction(
         "date": _metadata_value(metadata, "date"),
         "sitename": _metadata_value(metadata, "sitename"),
         "source_url": url,
+        "source_url_canonical": _normalize_url(url),
     }
     if source_metadata:
         page_metadata.update(source_metadata)
@@ -192,6 +311,48 @@ def _save_extraction(
     content = f"{_format_metadata(page_metadata)}\n\n{result.rstrip()}\n"
     output_path.write_text(content, encoding="utf-8")
     return output_path
+
+
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    temporary_path = path.with_name(f".{path.name}.tmp")
+    try:
+        temporary_path.write_text(
+            json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(temporary_path, path)
+    finally:
+        temporary_path.unlink(missing_ok=True)
+
+
+def _save_search_results(query: str, args, candidates: list[dict]) -> tuple[Path, dict]:
+    output_dir = _output_dir()
+    results = [
+        {
+            **item,
+            "canonical_url": _normalize_url(item["url"]),
+            "fetch_status": "pending",
+        }
+        for item in candidates
+    ]
+    payload = {
+        "schema_version": 1,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "query": query,
+        "search_options": {
+            "backend": args.backend,
+            "region": args.region,
+            "safesearch": args.safesearch,
+            "timelimit": args.timelimit,
+            "max_results": args.max_results,
+            "timeout": args.timeout,
+        },
+        "result_count": len(results),
+        "results": results,
+    }
+    path = output_dir / "ddgs_search.json"
+    _write_json_atomic(path, payload)
+    return path, payload
 
 
 def _search_ddgs(DDGS, query: str, args) -> list[dict]:
@@ -212,14 +373,15 @@ def _search_ddgs(DDGS, query: str, args) -> list[dict]:
     seen_urls = set()
     for item in raw_results:
         url = item.get("href") or item.get("url")
-        if not url or url in seen_urls:
+        canonical_url = _normalize_url(url) if url else ""
+        if not url or canonical_url in seen_urls:
             continue
-        seen_urls.add(url)
+        seen_urls.add(canonical_url)
         results.append(
             {
                 "url": url,
                 "title": item.get("title") or "",
-                "content": item.get("body") or item.get("content") or "",
+                "content": _search_summary(item.get("body") or item.get("content") or ""),
                 "publishedDate": item.get("date") or "",
             }
         )
@@ -227,6 +389,14 @@ def _search_ddgs(DDGS, query: str, args) -> list[dict]:
 
 
 def _run_single(url: str, args, fetch_url, extract, extract_metadata, requests) -> int:
+    _ensure_run_dir()
+    downloaded_urls = _downloaded_url_index()
+    existing_path = _existing_download(url, downloaded_urls)
+    if existing_path is not None:
+        print(f"Skipped existing URL: {url}")
+        print(f"Existing file: {existing_path}")
+        return 0
+
     downloaded = _fetch_html(url, fetch_url, requests, args.timeout)
     result = extract(downloaded)
     if not result:
@@ -241,16 +411,31 @@ def _run_single(url: str, args, fetch_url, extract, extract_metadata, requests) 
 def _run_search(query: str, args, fetch_url, extract, extract_metadata, requests) -> int:
     if args.max_results <= 0:
         raise ValueError("--max-results must be greater than 0.")
+    _ensure_run_dir()
     from ddgs import DDGS
 
     candidates = _search_ddgs(DDGS, query, args)
+    search_path, search_payload = _save_search_results(query, args, candidates)
+    search_results = search_payload["results"]
+    downloaded_urls = _downloaded_url_index()
     print(f"DDGS returned {len(candidates)} unique results.")
+    print(f"Saved DDGS search results to: {search_path}")
     success_count = 0
     failure_count = 0
-    for index, item in enumerate(candidates, start=1):
+    skipped_count = 0
+    for index, item in enumerate(search_results, start=1):
         url = item["url"]
         title = item.get("title") or ""
         print(f"[{index}/{len(candidates)}] fetching {title or url}", file=sys.stderr, flush=True)
+        existing_path = _existing_download(url, downloaded_urls)
+        if existing_path is not None:
+            item["fetch_status"] = "skipped_existing"
+            item["output_file"] = _relative_output_path(existing_path)
+            skipped_count += 1
+            _write_json_atomic(search_path, search_payload)
+            print(f"Skipped existing [{index}/{len(candidates)}]: {existing_path}")
+            continue
+
         try:
             downloaded = _fetch_html(url, fetch_url, requests, args.timeout)
             result = extract(downloaded)
@@ -271,16 +456,23 @@ def _run_search(query: str, args, fetch_url, extract, extract_metadata, requests
                 fallback_title=title,
                 source_metadata=source_metadata,
             )
+            item["fetch_status"] = "saved"
+            item["output_file"] = _relative_output_path(output_path)
+            downloaded_urls[_normalize_url(url)] = output_path
+            _write_json_atomic(search_path, search_payload)
             print(f"Saved [{index}/{len(candidates)}]: {output_path}")
             success_count += 1
         except Exception as exc:
+            item["fetch_status"] = "failed"
+            item["error"] = f"{type(exc).__name__}: {exc}"
+            _write_json_atomic(search_path, search_payload)
             failure_count += 1
             print(f"Skipped [{index}/{len(candidates)}] {url}: {exc}", file=sys.stderr)
         if args.delay > 0 and index < len(candidates):
             time.sleep(args.delay)
 
-    print(f"Finished: {success_count} saved, {failure_count} skipped.")
-    return 0 if success_count or not candidates else 1
+    print(f"Finished: {success_count} saved, {skipped_count} already downloaded, {failure_count} skipped.")
+    return 0 if success_count or skipped_count or not candidates else 1
 
 
 def main() -> int:
@@ -290,6 +482,7 @@ def main() -> int:
         raise ValueError("Use either a URL or --query, not both.")
     if not args.url and not args.query:
         args.url = DEFAULT_URL
+    _create_run_dir()
 
     # This file has the same name as the third-party package. Remove the local
     # cli directory from sys.path before importing the installed package.

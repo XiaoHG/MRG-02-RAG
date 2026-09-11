@@ -55,7 +55,7 @@ def write_extraction_run(
     results: list[ExtractionResult],
     output_dir: str | Path,
     *,
-    run_name: str = "v1_extraction",
+    run_name: str = "extraction",
     created_at: datetime | None = None,
 ) -> Path:
     created_at = created_at or datetime.now(timezone.utc)

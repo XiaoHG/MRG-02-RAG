@@ -1,7 +1,0 @@
-{
-  "keywords": ["氟斑牙", "氟骨症", "氟中毒"],
-  "url_templates": [
-    "https://duckduckgo.com/?q={keyword}",
-    "https://www.baidu.com/s?wd={keyword}"
-  ]
-}

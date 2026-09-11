@@ -3,10 +3,11 @@ references/*
 !references/
 !references/*.md
 output/
-dataset/
 .agents/
 .pytest_cache/
 .pytest_tmp/
+.test_tmp/
+.vscode/
 __pycache__/
 models/
 *.py[cod]
