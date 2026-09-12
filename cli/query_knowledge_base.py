@@ -64,20 +64,45 @@ def _safe_query_name(query: str, max_length: int = 80) -> str:
     return name[:max_length] or "query"
 
 
-def _new_result_path(output_dir: Path, table: str, query: str) -> Path:
+def _new_run_dir(output_dir: Path) -> Path:
+    """Create an isolated timestamped directory for one query invocation."""
     output_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S_%fZ")
-    base_name = f"{table}_{_safe_query_name(query)}_{timestamp}"
-    result_path = output_dir / f"{base_name}.json"
+    run_dir = output_dir / timestamp
     suffix = 1
-    while result_path.exists():
-        result_path = output_dir / f"{base_name}_{suffix:02d}.json"
+    while run_dir.exists():
+        run_dir = output_dir / f"{timestamp}_{suffix:02d}"
         suffix += 1
-    return result_path
+    run_dir.mkdir()
+    return run_dir
 
 
-def _write_query_result(output_dir: Path, table: str, query: str, rows: list[dict]) -> Path:
-    result_path = _new_result_path(output_dir, table, query)
+def _new_result_path(run_dir: Path, table: str, query: str) -> Path:
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir / f"{table}_{_safe_query_name(query)}.json"
+
+
+def _filtered_rows(table: str, rows: list[dict]) -> list[dict]:
+    id_field = "chunk_id" if table == "chunks" else "triple_id"
+    return [
+        {
+            "id": row.get(id_field),
+            "content": row.get("content"),
+            "distance": row.get("distance", row.get("_distance")),
+        }
+        for row in rows
+    ]
+
+
+def _write_query_result(
+    output_dir: Path,
+    table: str,
+    query: str,
+    rows: list[dict],
+    *,
+    run_dir: Path | None = None,
+) -> Path:
+    result_path = _new_result_path(run_dir or _new_run_dir(output_dir), table, query)
     payload = {
         "created_at": datetime.now(timezone.utc).isoformat(),
         "table": table,
@@ -87,6 +112,15 @@ def _write_query_result(output_dir: Path, table: str, query: str, rows: list[dic
     }
     result_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2, default=str) + "\n",
+        encoding="utf-8",
+    )
+    return result_path
+
+
+def _write_filtered_result(run_dir: Path, table: str, query: str, rows: list[dict]) -> Path:
+    result_path = run_dir / f"{table}_{_safe_query_name(query)}_filtered.json"
+    result_path.write_text(
+        json.dumps(_filtered_rows(table, rows), ensure_ascii=False, indent=2, default=str) + "\n",
         encoding="utf-8",
     )
     return result_path
@@ -119,8 +153,13 @@ def main() -> int:
             review_status=args.review_status,
             source_type=args.source_type,
         )
-    result_path = _write_query_result(args.output_dir, args.table, args.query, rows)
+    run_dir = _new_run_dir(args.output_dir)
+    result_path = _write_query_result(
+        args.output_dir, args.table, args.query, rows, run_dir=run_dir
+    )
+    filtered_path = _write_filtered_result(run_dir, args.table, args.query, rows)
     print(f"Saved {len(rows)} query results to: {result_path}")
+    print(f"Saved filtered query results to: {filtered_path}")
     return 0
 
 

@@ -3,7 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from cli.query_knowledge_base import _safe_query_name, _write_query_result
+from cli.query_knowledge_base import (
+    _safe_query_name,
+    _write_filtered_result,
+    _write_query_result,
+)
 
 
 def test_query_result_is_saved_as_timestamped_json(tmp_path: Path) -> None:
@@ -15,7 +19,8 @@ def test_query_result_is_saved_as_timestamped_json(tmp_path: Path) -> None:
         [{"chunk_id": "chunk-1", "content": "evidence"}],
     )
 
-    assert result_path.parent == tmp_path
+    assert result_path.parent.parent == tmp_path
+    assert result_path.parent.name.endswith("Z")
     assert result_path.suffix == ".json"
     assert result_path.name.startswith("chunks_")
     assert "?" not in result_path.name
@@ -23,6 +28,16 @@ def test_query_result_is_saved_as_timestamped_json(tmp_path: Path) -> None:
     assert payload["query"] == query
     assert payload["result_count"] == 1
     assert payload["results"][0]["chunk_id"] == "chunk-1"
+
+    filtered_path = _write_filtered_result(
+        result_path.parent,
+        "chunks",
+        query,
+        [{"chunk_id": "chunk-1", "content": "evidence", "_distance": 0.125, "title": "ignored"}],
+    )
+    assert json.loads(filtered_path.read_text(encoding="utf-8")) == [
+        {"id": "chunk-1", "content": "evidence", "distance": 0.125}
+    ]
 
 
 def test_each_query_result_gets_a_new_file(tmp_path: Path) -> None:
